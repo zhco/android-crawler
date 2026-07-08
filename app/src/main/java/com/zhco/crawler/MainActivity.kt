@@ -141,6 +141,7 @@ function getSelector(el){
 function getText(el){return el.textContent.trim().substring(0,60);}
 
 document.addEventListener('touchstart',function(e){
+  e.preventDefault();
   var el=e.target;
   if(el.closest('.crawler_ov'))return;
   if(_hl){_hl.style.outline='';_hl=null;}
@@ -182,7 +183,7 @@ document.addEventListener('touchstart',function(e){
     document.body.appendChild(div);
     _ov=div;
   }
-},{passive:true});
+},{passive:false});
 """ // language=JavaScript
         b.webView.evaluateJavascript(js, null)
     }
