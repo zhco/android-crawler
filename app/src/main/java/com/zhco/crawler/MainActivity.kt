@@ -19,7 +19,6 @@ import java.io.OutputStream
 class MainActivity : AppCompatActivity() {
     private lateinit var b: ActivityMainBinding
 
-    private var listSelector = ""
     private var fieldSelectors = mutableMapOf<String, String>()
     private var mode = "list" // "list" | "field"
     private var crawledData = mutableListOf<Map<String, String>>()
@@ -76,118 +75,146 @@ class MainActivity : AppCompatActivity() {
     private fun setMode(m: String) {
         mode = m
         fieldSelectors.clear()
+        crawledData.clear()
         b.btnModeList.isSelected = m == "list"
         b.btnModeField.isSelected = m == "field"
-        b.btnCrawl.text = if (m == "list") "选列表 → 爬取" else "选字段 → 爬取"
+        if (m == "list") {
+            b.btnCrawl.text = "识别列表"
+            toast("点击页面中的列表区域")
+        } else {
+            b.btnCrawl.text = "开始爬取"
+            toast("点击页面元素设为字段")
+        }
         b.webView.evaluateJavascript("setCrawlerMode('$m')", null)
     }
 
     private fun injectSelectionJS() {
         val js = """
-function setCrawlerMode(m){window.__cmode__=m;}
+function setCrawlerMode(m){window.__cmode__=m;window._sel=null;window._fields={};}
 window.__cmode__='$mode';
-(function(){
-var old=document.querySelectorAll.bind(document);
-var ov=null,od=null;
+window._sel=null;
+window._fields={};
+var _hl=null,_ov=null;
+
+function findContainer(el){
+  while(el&&el!==document.body){
+    var t=el.tagName.toLowerCase();
+    if(/table|tbody|ul|ol|select/.test(t))return el;
+    var ch=el.children;
+    if(ch.length>=3){
+      var same=0;
+      for(var i=0;i<ch.length;i++){
+        if(ch[i].tagName===ch[0].tagName)same++;
+      }
+      if(same>=3)return el;
+    }
+    if(el.className&&/\b(list|items|result|row|grid|table)\b/i.test(el.className))return el;
+    el=el.parentElement;
+  }
+  return null;
+}
+
 function getSelector(el){
-  if(!el||el===document.body)return '';
+  if(!el||el===document.body)return'';
   var path=[],cur=el;
   while(cur&&cur!==document.body){
-    var tag=cur.tagName.toLowerCase();
+    var t=cur.tagName.toLowerCase();
     if(cur.id){path.unshift('#'+cur.id);break;}
-    var cls=Array.from(cur.classList).filter(c=>!/^crawler_/.test(c));
-    var s=tag;
+    var cls=Array.from(cur.classList).filter(function(c){return !/^crawler_/.test(c);});
+    var s=t;
     if(cls.length)s+='.'+cls.join('.');
     if(cur.parentElement){
-      var sib=Array.from(cur.parentElement.children).filter(c=>c.tagName===cur.tagName);
-      if(sib.length>1)s+=':nth-child('+(Array.from(cur.parentElement.children).indexOf(cur)+1)+')';
+      var sib=cur.parentElement.children;
+      var same=[];
+      for(var i=0;i<sib.length;i++){
+        if(sib[i].tagName===cur.tagName)same.push(i);
+      }
+      if(same.length>1)s+=':nth-child('+(same.indexOf(Array.from(sib).indexOf(cur))+1)+')';
     }
     path.unshift(s);
     cur=cur.parentElement;
   }
   return path.join(' > ');
 }
-function getText(el){return el.textContent.trim().substring(0,80);}
+
+function getText(el){return el.textContent.trim().substring(0,60);}
+
 document.addEventListener('touchstart',function(e){
   var el=e.target;
-  if(el.closest('.crawler_overlay'))return;
-  if(od)od.style.outline='';
-  if(ov){ov.remove();ov=null;}
+  if(el.closest('.crawler_ov'))return;
+  if(_hl){_hl.style.outline='';_hl=null;}
+  if(_ov){_ov.remove();_ov=null;}
+  
   if(window.__cmode__==='list'){
-    el.style.outline='3px solid #2196F3';
-    od=el;
+    var cont=findContainer(el);
+    if(!cont)cont=el;
+    cont.style.outline='3px solid #4CAF50';
+    _hl=cont;
+    var sel=getSelector(cont);
+    var items=cont.querySelectorAll('tr,li,>div,>*,>tbody>tr');
+    window._sel=sel;
+    window.Crawler.onList(items.length||cont.children.length,sel);
   }else{
     var div=document.createElement('div');
-    div.className='crawler_overlay';
-    div.style.cssText='position:fixed;bottom:70px;left:10px;right:10px;background:#333;color:#fff;padding:12px;border-radius:8px;z-index:99999;font-size:14px;';
-    div.innerHTML='<b>选择器:</b> '+getSelector(el)+'<br><b>示例:</b> '+getText(el)+
-      '<br><button class="crawler_btn" style="margin-top:8px;padding:6px 16px;background:#4CAF50;color:#fff;border:none;border-radius:4px;">设为字段</button>';
-    div.querySelector('.crawler_btn').onclick=function(){
-      var sel=getSelector(el);
-      var name=prompt('字段名:',sel.replace(/[^a-z]/g,'_').substring(0,20));
-      if(name)window.Crawler.onField(name,sel,getText(el));
-      div.remove();ov=null;
+    div.className='crawler_ov';
+    div.style.cssText='position:fixed;bottom:70px;left:10px;right:10px;background:#333;color:#fff;padding:12px;border-radius:8px;z-index:99999;font-size:13px;';
+    var sel=getSelector(el);
+    div.innerHTML='<div style="margin-bottom:6px"><b>'+sel.substring(sel.length-30)+'</b><br>'+getText(el)+'</div>'+
+      '<div style="display:flex;gap:6px">'+
+      '<input class="crawler_fn" style="flex:1;padding:4px 8px;border:none;border-radius:4px;font-size:13px" placeholder="字段名">'+
+      '<button class="crawler_ok" style="padding:4px 12px;background:#4CAF50;color:#fff;border:none;border-radius:4px">确定</button>'+
+      '</div>';
+    div.querySelector('.crawler_ok').onclick=function(){
+      var nm=div.querySelector('.crawler_fn').value.trim();
+      if(!nm)nm='field_'+(Object.keys(window._fields||{}).length+1);
+      window._fields=window._fields||{};
+      window._fields[nm]=sel;
+      window.Crawler.onField(nm,sel,getText(el));
+      div.remove();_ov=null;
     };
     document.body.appendChild(div);
-    ov=div;
+    _ov=div;
   }
 },{passive:true});
-})();
 """ // language=JavaScript
         b.webView.evaluateJavascript(js, null)
     }
 
     private fun doCrawl() {
-        if (mode == "list" && listSelector.isEmpty()) {
+        if (mode == "list") {
             b.webView.evaluateJavascript("""
-                (function(){
-                    var el=document.querySelector('body *');
-                    var sel=window.__lastListSel__;
-                    var items=sel?document.querySelectorAll(sel):[];
-                    var count=items.length||(el&&el.children?el.children.length:0);
-                    window.Crawler.onList(count,sel||'body>*');
-                })();
-            """.trimIndent()) { result ->
-                if (result?.contains("\"count\":") == true) return@evaluateJavascript
-                // Try to find list automatically
-                b.webView.evaluateJavascript("""
 (function(){
-var best=null,bestCount=0;
-var els=document.querySelectorAll('table,ul,ol,div.list,div.items,.result_list,.data_list');
-els.forEach(function(el){
-  var rows=el.querySelectorAll('tr,li,div.item,div.row');
-  if(rows.length>bestCount){best=rows[0].parentElement;bestCount=rows.length;}
-});
-if(best){
-  var sel=(best.id?'#'+best.id:best.tagName.toLowerCase()+'.'+Array.from(best.classList).join('.'));
-  window.Crawler.onAutoList(sel,bestCount);
-}else{
-  window.Crawler.onError('未找到列表元素，请先点选列表项');
-}
+  var sel=window._sel;
+  if(!sel){window.Crawler.onError('请先点击列表区域');return;}
+  var items=document.querySelectorAll(sel+' > tr, '+sel+' > li, '+sel+' > div, '+sel+' > tbody > tr, '+sel+' > *');
+  if(items.length===0)items=document.querySelectorAll(sel+' *');
+  window.Crawler.onList(items.length,sel);
 })();
-                """.trimIndent(), null)
-            }
+""".trimIndent(), null)
             return
         }
-        // Execute crawl
-        if (mode == "field" && fieldSelectors.isEmpty()) {
+
+        if (fieldSelectors.isEmpty()) {
             toast("请先点选字段")
             return
         }
         val fieldsJs = fieldSelectors.map { (k, v) -> "\"$k\":\"$v\"" }.joinToString(",")
         b.webView.evaluateJavascript("""
 (function(){
-  var listSel='$listSelector';
+  var listSel=window._sel;
   var fields={$fieldsJs};
-  var items=document.querySelectorAll(listSel);
+  if(!listSel){window.Crawler.onError('请先点击列表区域');return;}
+  var items=document.querySelectorAll(listSel+' > tr, '+listSel+' > li, '+listSel+' > div, '+listSel+' > tbody > tr, '+listSel+' > *');
+  if(items.length===0)items=document.querySelectorAll(listSel+' *');
   var data=[];
-  items.forEach(function(item){
-    var row={};
-    for(var key in fields){
-      var el=item.querySelector(fields[key]);
-      row[key]=el?el.textContent.trim().substring(0,200):'';
+  items.forEach(function(row){
+    var r={};
+    for(var k in fields){
+      var el=row.querySelector(fields[k]);
+      if(!el)el=row;
+      r[k]=el.textContent.trim().substring(0,200);
     }
-    data.push(row);
+    data.push(r);
   });
   window.Crawler.onResult(JSON.stringify(data));
 })();
@@ -243,16 +270,7 @@ if(best){
         @JavascriptInterface
         fun onList(count: Int, selector: String) {
             runOnUiThread {
-                listSelector = selector
-                toast("列表: ${if (selector.isNotEmpty()) selector else "自动检测"} ($count 项)")
-            }
-        }
-
-        @JavascriptInterface
-        fun onAutoList(selector: String, count: Int) {
-            runOnUiThread {
-                listSelector = selector
-                toast("自动识别列表: $selector ($count 项)")
+                toast("列表: ${if (selector.isNotEmpty()) selector.substringAfterLast('>').trim() else "自动检测"} ($count 项)")
             }
         }
 
