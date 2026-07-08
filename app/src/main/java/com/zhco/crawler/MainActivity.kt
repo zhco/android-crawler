@@ -141,9 +141,9 @@ function getSelector(el){
 function getText(el){return el.textContent.trim().substring(0,60);}
 
 document.addEventListener('touchstart',function(e){
-  e.preventDefault();
   var el=e.target;
   if(el.closest('.crawler_ov'))return;
+  e.preventDefault();
   if(_hl){_hl.style.outline='';_hl=null;}
   if(_ov){_ov.remove();_ov=null;}
   
