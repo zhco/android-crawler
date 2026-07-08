@@ -100,6 +100,7 @@ function findContainer(el){
   while(el&&el!==document.body){
     var t=el.tagName.toLowerCase();
     if(/table|tbody|ul|ol|select/.test(t))return el;
+    if(t==='tr'){el=el.parentElement;continue;}
     var ch=el.children;
     if(ch.length>=3){
       var same=0;
@@ -158,7 +159,13 @@ document.addEventListener('touchstart',function(e){
     var div=document.createElement('div');
     div.className='crawler_ov';
     div.style.cssText='position:fixed;bottom:70px;left:10px;right:10px;background:#333;color:#fff;padding:12px;border-radius:8px;z-index:99999;font-size:13px;';
-    var sel=getSelector(el);
+    var sel,t=el.tagName.toLowerCase();
+    if(t==='td'||t==='th'){
+      var idx=Array.prototype.indexOf.call(el.parentElement.children,el)+1;
+      sel=t+':nth-child('+idx+')';
+    }else{
+      sel=getSelector(el);
+    }
     div.innerHTML='<div style="margin-bottom:6px"><b>'+sel.substring(sel.length-30)+'</b><br>'+getText(el)+'</div>'+
       '<div style="display:flex;gap:6px">'+
       '<input class="crawler_fn" style="flex:1;padding:4px 8px;border:none;border-radius:4px;font-size:13px" placeholder="字段名">'+
@@ -208,6 +215,7 @@ document.addEventListener('touchstart',function(e){
   if(items.length===0)items=document.querySelectorAll(listSel+' *');
   var data=[];
   items.forEach(function(row){
+    if(row.querySelector('th')&&!row.querySelector('td'))return;
     var r={};
     for(var k in fields){
       var el=row.querySelector(fields[k]);
