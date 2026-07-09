@@ -23,7 +23,7 @@ class MainActivity : AppCompatActivity() {
     data class DataSource(
         val name: String,
         val headers: List<String>,
-        val rows: List<Map<String, String>>
+        val rows: MutableList<Map<String, String>>
     )
 
     @SuppressLint("SetJavaScriptEnabled")
