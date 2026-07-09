@@ -175,6 +175,32 @@ class MainActivity : AppCompatActivity() {
     };
   })();
 
+  // 扫描全局 JS 数组变量（SPA 页面常用）
+  setTimeout(function(){
+    if(window._crawled)return;
+    var foundArr=[];
+    Object.keys(window).forEach(function(k){
+      if(foundArr.length>5)return;
+      try{
+        var v=window[k];
+        if(!v||typeof v!=='object'||k==='Crawler'||k==='self'||k==='top'||k==='window'||k==='document'||k==='location'||k==='navigator')return;
+        if(Array.isArray(v)&&v.length>30){
+          if(v.length>0&&typeof v[0]==='object')foundArr.push({name:k,data:v});
+          else if(v.length>0&&typeof v[0]!=='object')foundArr.push({name:k,data:v.map(function(x){return{value:x}})});
+        }
+      }catch(e){}
+    });
+    foundArr.forEach(function(f){
+      window._crawled=true;
+      var rows=f.data.slice(0,2000).map(function(item){
+        if(typeof item==='object'&&item!==null)return flattenObject(item,'');
+        return{value:String(item)};
+      });
+      var keys=Object.keys(rows[0]||{});
+      window.Crawler.onDataSource('js_'+f.name, keys.join(','), JSON.stringify(rows));
+    });
+  },500);
+
   function flattenObject(obj, prefix){
     var result={};
     for(var k in obj){
