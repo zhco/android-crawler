@@ -72,12 +72,35 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
+    <ScrollView
+        android:id="@+id/scrollPreview"
+        android:layout_width="match_parent"
+        android:layout_height="160dp"
+        android:background="#FFFFFF"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <HorizontalScrollView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/tvPreview"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:lineSpacingMultiplier="1.1"
+                android:text="" />
+        </HorizontalScrollView>
+    </ScrollView>
+
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="48dp"
         android:orientation="horizontal"
         android:background="#F5F5F5"
-        android:padding="8dp"
+        android:paddingHorizontal="8dp"
         android:gravity="center">
 
         <TextView
@@ -92,7 +115,7 @@
         <Button
             android:id="@+id/btnExport"
             android:layout_width="120dp"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:text="导出全部"
             android:textSize="13sp"
             android:backgroundTint="#4CAF50"
