@@ -294,6 +294,20 @@ class MainActivity : AppCompatActivity() {
       if(rows.length>=3)found.push({name:'group',headers:headers,rows:rows});
     });
     
+    // 2. DL 定义列表 (dt/dd 键值对)
+    document.querySelectorAll('dl').forEach(function(dl,i){
+      var dts=dl.querySelectorAll('dt');
+      var dds=dl.querySelectorAll('dd');
+      if(dts.length<1||dds.length<1)return;
+      var headers=[],row={};
+      dts.forEach(function(dt){headers.push(dt.textContent.trim().substring(0,50));});
+      dds.forEach(function(dd,j){
+        var v=dd.textContent.trim().substring(0,500);
+        if(v&&headers[j])row[headers[j]]=v;
+      });
+      if(Object.keys(row).length>0)found.push({name:'dl_'+(i+1),headers:headers,rows:[row]});
+    });
+
     // 去重上报
     var dedup={};
     found.forEach(function(f){
@@ -302,6 +316,74 @@ class MainActivity : AppCompatActivity() {
       window.Crawler.onDataSource(f.name, f.headers.join(','), JSON.stringify(f.rows));
     });
   },4000);
+
+  // iframe 内嵌扫描
+  setTimeout(function(){
+    if(window._crawled)return;
+    document.querySelectorAll('iframe').forEach(function(iframe){
+      try{
+        var doc=iframe.contentDocument||iframe.contentWindow.document;
+        if(!doc)return;
+        doc.querySelectorAll('table').forEach(function(t,i){
+          var rows=[],headers=[];
+          t.querySelectorAll('tr').forEach(function(tr){
+            var cells=tr.querySelectorAll('td,th');
+            if(cells.length===0)return;
+            var isHeader=tr.querySelectorAll('th').length>0&&tr.querySelectorAll('td').length===0;
+            if(isHeader&&headers.length===0){
+              cells.forEach(function(c){headers.push(c.textContent.trim());});
+            }else{
+              var r={},hasData=false;
+              cells.forEach(function(c,j){
+                var v=c.textContent.trim();
+                if(v&&!/^[-.:#]+$/.test(v))hasData=true;
+                r[headers[j]||'col'+(j+1)]=v;
+              });
+              if(hasData)rows.push(r);
+            }
+          });
+          if(rows.length>0)window.Crawler.onDataSource('iframe_table_'+(i+1), headers.join(','), JSON.stringify(rows));
+        });
+      }catch(e){}
+    });
+  },5000);
+
+  // 分页/无限滚动
+  setTimeout(function(){
+    if(window._crawled)return;
+    var scrollStep=1200,maxScrolls=8,delay=1000,count=0;
+    function doScroll(){
+      if(count>=maxScrolls||window._crawled)return;
+      var prevY=window.scrollY;
+      window.scrollBy(0,scrollStep); count++;
+      setTimeout(function(){
+        if(window.scrollY===prevY||window._crawled)return;
+        var tables=document.querySelectorAll('table');
+        tables.forEach(function(t,i){
+          var rows=[],headers=[];
+          t.querySelectorAll('tr').forEach(function(tr){
+            var cells=tr.querySelectorAll('td,th');
+            if(cells.length===0)return;
+            var isHeader=tr.querySelectorAll('th').length>0&&tr.querySelectorAll('td').length===0;
+            if(isHeader&&headers.length===0){
+              cells.forEach(function(c){headers.push(c.textContent.trim());});
+            }else{
+              var r={},hasData=false;
+              cells.forEach(function(c,j){
+                var v=c.textContent.trim();
+                if(v&&!/^[-.:#]+$/.test(v))hasData=true;
+                r[headers[j]||'col'+(j+1)]=v;
+              });
+              if(hasData)rows.push(r);
+            }
+          });
+          if(rows.length>0)window.Crawler.onDataSource('scroll_table_'+(i+1), headers.join(','), JSON.stringify(rows));
+        });
+        doScroll();
+      },delay);
+    }
+    doScroll();
+  },6000);
 })();
 """.trimIndent()
 
