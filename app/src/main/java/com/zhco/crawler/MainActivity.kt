@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
             b.btnExport.isEnabled = false
             b.tvFound.text = "加载中..."
             b.tvStatus.text = ""
+            b.scrollPreview.visibility = android.view.View.GONE
             b.webView.loadUrl(fullUrl)
         }
 
@@ -81,7 +82,27 @@ class MainActivity : AppCompatActivity() {
             b.tvFound.text = "找到 ${dataSources.size} 个数据源 / 共 $total 条"
             b.btnExport.isEnabled = total > 0
             b.tvStatus.text = if (dataCount > 0) "API: $dataCount" else ""
+            updatePreview()
         }
+    }
+
+    private fun updatePreview() {
+        val ds = dataSources.firstOrNull() ?: return
+        if (ds.rows.isEmpty()) return
+        val sb = StringBuilder()
+        val cols = ds.headers
+        // 列名行
+        sb.appendLine(cols.joinToString(" │ ") { it.take(12).padEnd(12) })
+        sb.appendLine("─".repeat(cols.size * 15))
+        // 前 10 行数据
+        val previewRows = ds.rows.take(10)
+        previewRows.forEach { row ->
+            val vals = cols.map { (row[it] ?: "").take(12).padEnd(12) }
+            sb.appendLine(vals.joinToString(" │ "))
+        }
+        if (ds.rows.size > 10) sb.appendLine("... 共 ${ds.rows.size} 行")
+        b.tvPreview.text = sb.toString()
+        b.scrollPreview.visibility = android.view.View.VISIBLE
     }
 
     private fun exportAll() {
@@ -154,27 +175,43 @@ class MainActivity : AppCompatActivity() {
     };
   })();
 
+  function flattenObject(obj, prefix){
+    var result={};
+    for(var k in obj){
+      if(!obj.hasOwnProperty(k))continue;
+      var v=obj[k], key=prefix?prefix+'.'+k:k;
+      if(v!==null&&typeof v==='object'&&!Array.isArray(v)){
+        var sub=flattenObject(v,key);
+        for(var sk in sub){if(sub.hasOwnProperty(sk))result[sk]=sub[sk];}
+      }else if(Array.isArray(v)&&v.length>0&&typeof v[0]==='object'){
+        for(var i=0;i<v.length;i++){
+          var sub2=flattenObject(v[i],key+'['+i+']');
+          for(var sk in sub2){if(sub2.hasOwnProperty(sk))result[sk]=sub2[sk];}
+        }
+      }else{
+        result[key]=String(v).substring(0,500);
+      }
+    }
+    return result;
+  }
+
   function processJSON(url, obj){
     if(window._crawled)return;
     var arr=null;
     if(Array.isArray(obj)&&obj.length>0)arr=obj;
     else if(typeof obj==='object'){
-      // 找第一个数组字段
       for(var k in obj){
         if(obj.hasOwnProperty(k)&&Array.isArray(obj[k])&&obj[k].length>0&&typeof obj[k][0]==='object'){
           arr=obj[k]; break;
         }
       }
+      if(!arr){for(var k in obj){if(obj.hasOwnProperty(k)&&Array.isArray(obj[k])&&obj[k].length>0){arr=obj[k];break;}}}
     }
     if(!arr||arr.length===0)return;
     window._crawled=true;
-    var keys=Object.keys(arr[0]||{});
+    var rows=arr.slice(0,500).map(function(item){return flattenObject(item,'');});
+    var keys=Object.keys(rows[0]||{});
     var name='api_'+url.split('?')[0].split('/').pop().substring(0,20);
-    var rows=arr.slice(0,500).map(function(item){
-      var r={};
-      keys.forEach(function(k){ r[k]=String(item[k]??'').substring(0,200); });
-      return r;
-    });
     window.Crawler.onDataSource(name, keys.join(','), JSON.stringify(rows));
   }
 
