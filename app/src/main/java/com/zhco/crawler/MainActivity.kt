@@ -175,10 +175,12 @@ class MainActivity : AppCompatActivity() {
     };
   })();
 
-  // 扫描全局 JS 数组变量（SPA 页面常用）
+  // 扫描全局 JS 数组变量 + script 标签内的大数组
   setTimeout(function(){
     if(window._crawled)return;
     var foundArr=[];
+
+    // 1. window 属性扫描 (var 声明的)
     Object.keys(window).forEach(function(k){
       if(foundArr.length>5)return;
       try{
@@ -186,13 +188,42 @@ class MainActivity : AppCompatActivity() {
         if(!v||typeof v!=='object'||k==='Crawler'||k==='self'||k==='top'||k==='window'||k==='document'||k==='location'||k==='navigator')return;
         if(Array.isArray(v)&&v.length>30){
           if(v.length>0&&typeof v[0]==='object')foundArr.push({name:k,data:v});
-          else if(v.length>0&&typeof v[0]!=='object')foundArr.push({name:k,data:v.map(function(x){return{value:x}})});
+          else if(v.length>0)foundArr.push({name:k,data:v.map(function(x){return{value:x}})});
         }
       }catch(e){}
     });
+
+    // 2. script 标签内容扫描 (const/let 声明的)
+    if(foundArr.length===0){
+      document.querySelectorAll('script').forEach(function(s){
+        var txt=s.textContent||s.innerText||'';
+        if(!txt)return;
+        // 匹配 JSON 数组: [...] 连续多个对象
+        var m=txt.match(/\[\s*\{\s*"[^"]+"\s*:/);
+        if(!m)return;
+        var start=m.index;
+        var depth=0,inStr=false,esc=false,end=-1;
+        for(var i=start;i<txt.length;i++){
+          var c=txt[i];
+          if(esc){esc=false;continue;}
+          if(c==='\\'){esc=true;continue;}
+          if(c==='"'){inStr=!inStr;}
+          if(inStr)continue;
+          if(c==='[')depth++;
+          else if(c===']'){depth--;if(depth===0){end=i+1;break;}}
+        }
+        if(end<0)return;
+        try{
+          var arr=JSON.parse(txt.substring(start,end));
+          if(Array.isArray(arr)&&arr.length>30&&typeof arr[0]==='object')
+            foundArr.push({name:'script_array',data:arr});
+        }catch(e){}
+      });
+    }
+
     foundArr.forEach(function(f){
       window._crawled=true;
-      var rows=f.data.slice(0,2000).map(function(item){
+      var rows=f.data.slice(0,5000).map(function(item){
         if(typeof item==='object'&&item!==null)return flattenObject(item,'');
         return{value:String(item)};
       });
