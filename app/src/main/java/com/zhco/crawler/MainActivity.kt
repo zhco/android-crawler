@@ -243,6 +243,65 @@ class MainActivity : AppCompatActivity() {
       if(rows.length>0)window.Crawler.onDataSource(name, headers.join(','), JSON.stringify(rows));
     });
   },3000);
+
+  // 非表格自动检测 (列表/卡片)
+  setTimeout(function(){
+    if(window._crawled)return;
+    var found=[];
+    
+    // 1. UL/OL 列表
+    document.querySelectorAll('ul,ol').forEach(function(el,i){
+      var items=el.querySelectorAll(':scope > li');
+      if(items.length<3)return;
+      var rows=[],headers=['内容'];
+      items.forEach(function(li){ 
+        var txt=li.textContent.trim();
+        if(txt)rows.push({'内容':txt.substring(0,500)});
+      });
+      if(rows.length>0)found.push({name:'list_'+(i+1),headers:headers,rows:rows});
+    });
+    
+    // 2. 重复同类子元素容器 (卡片)
+    document.querySelectorAll('div,section,article,main').forEach(function(el){
+      if(found.length>=5)return;
+      var children=el.children;
+      if(children.length<3)return;
+      var tag0=children[0].tagName;
+      var sameTag=0;
+      for(var i=0;i<children.length;i++){if(children[i].tagName===tag0)sameTag++;}
+      if(sameTag<3)return;
+      
+      var rows=[],headers=[],kid=children[0];
+      // 尝试提取子元素的子节点作为列
+      var subEls=kid.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,div,td,a,li,strong,em,time,small');
+      if(subEls.length>=2&&subEls.length<=15){
+        subEls.forEach(function(se,j){headers.push('列'+(j+1));});
+        for(var i=0;i<children.length;i++){
+          var r={},subs=children[i].querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,div,td,a,li,strong,em,time,small');
+          if(subs.length!==subEls.length)continue;
+          var hasData=false;
+          subs.forEach(function(s,j){var v=s.textContent.trim();if(v)hasData=true;r['列'+(j+1)]=v.substring(0,200);});
+          if(hasData)rows.push(r);
+        }
+      }else{
+        // 直接取子元素文本
+        headers.push('内容');
+        for(var i=0;i<children.length;i++){
+          var txt=children[i].textContent.trim();
+          if(txt)rows.push({'内容':txt.substring(0,500)});
+        }
+      }
+      if(rows.length>=3)found.push({name:'group',headers:headers,rows:rows});
+    });
+    
+    // 去重上报
+    var dedup={};
+    found.forEach(function(f){
+      var key=f.name+'_'+f.rows.length;
+      if(dedup[key])return; dedup[key]=true;
+      window.Crawler.onDataSource(f.name, f.headers.join(','), JSON.stringify(f.rows));
+    });
+  },4000);
 })();
 """.trimIndent()
 
